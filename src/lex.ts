@@ -40,6 +40,10 @@ export class Token {
 		this.text = tokenText;
 		this.kind = tokenKind;
 	}
+
+	static checkIfKeyword(tokenText: string): Nullable<TokenType> {
+		return null;
+	}
 }
 
 export class Lexer {
@@ -48,7 +52,7 @@ export class Lexer {
 	currPos: number;
 
 	constructor(code: string) {
-		this.code = code + "\n";
+		this.code = code + '\n';
 		this.currChar = '';
 		this.currPos = -1;
 
@@ -67,7 +71,7 @@ export class Lexer {
 	}
 
 	// Return the character at position next + 1
-	peek(): string {
+	peekChar(): string {
 		if (this.currPos + 1 >= this.code.length) {
 			return '\0';
 		} else {
@@ -76,24 +80,73 @@ export class Lexer {
 	}
 
 	// Print error message and exits
-	abort(): void {
-
+	quit(msg: string): void {
+		console.log("Lexing Error: " + msg);
 	}
 
 	// Skip whitespace except newlines in code
 	skipWhitespace(): void {
-
+		let ch = this.currChar;
+		if (ch == '\t' || ch == ' ' || ch == '\r') {
+			this.nextChar();
+		}
 	}
 
 	// Skip comments in code
 	skipComment(): void {
-
+		if (this.currChar === '#') {
+			this.currChar = '0';
+			while (this.currChar !== "\n") {
+				this.nextChar();
+			}
+		}
 	}
+
 
 	// Return next token
 	nextToken(): Nullable<Token> {
 		let token: Nullable<Token> = null;
+
+		this.skipWhitespace();
+		this.skipComment();
+
 		switch (this.currChar) {
+			case '=': {
+				if (this.peekChar() == '=') {
+					this.nextChar()
+					token = new Token("==", TokenType.EQEQ);
+				} else {
+					token = new Token(this.currChar, TokenType.EQ);
+				}
+				break;
+			}
+			case '>': {
+				if (this.peekChar() == '=') {
+					this.nextChar();
+					token = new Token(">=", TokenType.GTEQ)
+				} else {
+					token = new Token('=', TokenType.GT)
+				}
+				break;
+			}
+			case '<': {
+				if (this.peekChar() == '=') {
+					this.nextChar();
+					token = new Token("<=", TokenType.GTEQ)
+				} else {
+					token = new Token('=', TokenType.GT)
+				}
+				break;
+			}
+			case '!': {
+				if (this.peekChar() == '=') {
+					this.nextChar();
+					token = new Token("!=", TokenType.NOTEQ)
+				} else {
+					this.quit(`Expected !=, got !${this.peekChar()}`);
+				}
+				break;
+			}
 			case '+': {
 				token = new Token(this.currChar, TokenType.PLUS);
 				break;
@@ -110,6 +163,21 @@ export class Lexer {
 				token = new Token(this.currChar, TokenType.SLASH);
 				break;
 			}
+			case '\"': {
+				this.nextChar()
+				let startPos = this.currPos;
+
+				while (this.currChar != '\"') {
+					if (this.currChar == '\r' || this.currChar == '\n' || this.currChar == '\t' || this.currChar == '\\' || this.currChar == '%') {
+						this.quit("Illegal character in string.");
+					}
+					this.nextChar()
+
+					let tokText = this.code.substring(startPos, this.currPos);
+					token = new Token(tokText, TokenType.STRING);
+				}
+				break;
+			}
 			case '\n': {
 				token = new Token(this.currChar, TokenType.NEWLINE);
 				break;
@@ -119,6 +187,45 @@ export class Lexer {
 				break;
 			}
 			default: {
+				if (isDigit(this.currChar)) {
+					let startPos = this.currPos;
+
+					while (isDigit(this.peekChar())) {
+						this.nextChar();
+					}
+
+					if (this.peekChar() == '.') {
+						this.nextChar()
+
+						if (!(isDigit(this.peekChar()))) {
+							this.quit("Illegal character in number.");
+						}
+
+						while (isDigit(this.peekChar())) {
+							this.nextChar()
+						}
+						
+						let tokText = this.code.substring(startPos, this.currPos + 1);
+						token = new Token(tokText, TokenType.NUMBER);
+					}
+				} else if (isAlpha(this.currChar)) {
+					let startPos = this.currPos;
+
+					while (isAlphaNum(this.peekChar())) {
+						this.nextChar()
+					}
+
+					let tokText = this.code.substring(startPos, this.currPos + 1);
+					let keyword = Token.checkIfKeyword(tokText);
+
+					if (keyword == null) {
+						token = new Token(tokText, TokenType.IDENT);
+					} else {
+						token = new Token(tokText, keyword);
+					}
+				} else {
+					this.quit(`Unknown Token: ${this.currChar}`);
+				}
 			}
 		}
 		this.nextChar()
@@ -127,3 +234,15 @@ export class Lexer {
 	}
 }
 
+
+function isDigit(ch: string): boolean {
+	return Number(ch) != null || Number(ch) != undefined;
+}
+
+function isAlpha(ch: string): boolean {
+	return 'a' >= ch && ch <= 'z' || 'A' >= ch && ch <= 'Z';
+}
+
+function isAlphaNum(ch: string): boolean {
+	return isAlpha(ch) || isDigit(ch);
+}
